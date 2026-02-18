@@ -1,0 +1,27 @@
+Final Project Idea
+
+Examine whether a student's sleep duration can predict their exam performance among college-aged participants.
+
+This will examine how many hours of sleep the night before an exam correlates with their scores. Additional variables such as time studying and caffeine intake. The project goal is to assess whether increased sleep improves exam scores and whether study time can moderate this relationship.
+
+
+Data Description
+
+The dataset will include the following variables:
+
+student id
+
+hours of sleep (hours slept the night before exam)
+
+study hours (hours spent studying)
+
+caffeine in mg (estimated caffeine intake in mg)
+
+exam score (percentage score on exam)
+
+Collection of data through surveys voluntarily given by the students. Real data is not available, so simulated data will be given for the project.
+
+
+Expected Outcome
+
+I expect to see a positive correlation between hours of sleep and exam scores, with diminishing returns at higher levels of sleep. Students with both adequate sleep and higher study hours are expected to perform best.

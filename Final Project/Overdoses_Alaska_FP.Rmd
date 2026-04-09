@@ -1,0 +1,214 @@
+---
+title: "Trends in Drug Overdose Deaths in Alaska, 2015–2025"
+author: "Connor Dority"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+
+library(tidyverse)
+library(broom)
+
+theme_set(theme_minimal(base_size = 14))
+```
+
+# Introduction
+
+Drug overdose deaths remain a major public health concern in the United States, but the burden of overdose is not evenly distributed across states or across substances. Monitoring overdose trends over time can help identify changing patterns in mortality and highlight which drug categories may be contributing most strongly to the problem.
+
+This topic is personally meaningful to me, as overdose has affected my own family. Because of this, I wanted to examine real overdose surveillance data and understand how overdose patterns have changed over time.
+
+The purpose of this study is to analyze trends in overdose deaths in Alaska from 2015 through 2025. In particular, this project examines overall overdose deaths as well as selected drug-specific indicators in order to identify long-term patterns and potential shifts in substance-related mortality.
+
+# Data
+
+The dataset used in this project was obtained from CDC overdose surveillance data and contains monthly 12-month-ending observations for Alaska. The file includes multiple drug-related indicators, reported values, and model-based predicted values.
+
+Each row represents a state-month-indicator combination. Because the uploaded file only contains Alaska observations, this project focuses on temporal trends within one state rather than geographic comparisons across states.
+
+To make the analysis clearer, I filtered the dataset to focus on major overdose indicators and converted the numeric columns into usable formats for plotting.
+
+```{r}
+data <- read_csv("xkb8-kh2a.csv")
+
+data_clean <- data %>%
+  mutate(
+    data_value = as.numeric(data_value),
+    predicted_value = as.numeric(predicted_value),
+    month = factor(
+      month,
+      levels = c(
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      )
+    ),
+    date = as.Date(paste(year, month, "1"), format = "%Y %B %d")
+  ) %>%
+  filter(!is.na(date))
+```
+
+# Methods
+
+This analysis focuses on several key indicators available in the Alaska dataset. These include overall overdose mortality as well as selected drug-specific categories such as heroin, cocaine, methadone, and opioid-related deaths.
+
+Because the dataset contains repeated monthly observations across years, line plots were used to evaluate trends over time. Summary plots were also created to compare average values across indicators. In addition, a simple linear model was used to evaluate whether overall overdose deaths increased over time.
+
+# Exploratory Analysis
+
+## Indicators Included in the Dataset
+
+```{r}
+data_clean %>%
+  count(indicator, sort = TRUE)
+```
+
+The dataset includes multiple overdose-related indicators. Some reflect specific substances, while others capture broader categories such as total overdose deaths. This makes it possible to compare both overall mortality and selected drug-specific trends.
+
+## Overall Trend in Drug Overdose Deaths
+
+```{r}
+overall_deaths <- data_clean %>%
+  filter(indicator == "Number of Drug Overdose Deaths") %>%
+  filter(!is.na(data_value))
+
+ggplot(overall_deaths, aes(x = date, y = data_value)) +
+  geom_line(color = "#2C7FB8", linewidth = 1) +
+  labs(
+    title = "Alaska Drug Overdose Deaths Over Time",
+    x = "Year",
+    y = "Number of Drug Overdose Deaths"
+  ) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+This figure shows how overall overdose deaths changed over time in Alaska. Line plots allow long-term increases and decreases to be visualized more clearly.
+
+## Predicted vs Reported Overdose Deaths
+
+```{r}
+overall_compare <- data_clean %>%
+  filter(indicator == "Number of Drug Overdose Deaths")
+
+ggplot(overall_compare, aes(x = date)) +
+  geom_line(aes(y = data_value, color = "Reported"), linewidth = 1) +
+  geom_line(aes(y = predicted_value, color = "Predicted"), linewidth = 1, linetype = "dashed") +
+  scale_color_manual(values = c("Reported" = "#2C7FB8", "Predicted" = "#D95F0E")) +
+  labs(
+    title = "Reported vs Predicted Drug Overdose Deaths in Alaska",
+    x = "Year",
+    y = "Deaths",
+    color = ""
+  ) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+This figure compares reported overdose deaths with predicted values, helping evaluate how closely modeled estimates align with observed trends.
+
+## Trends for Major Drug Categories
+
+```{r fig.width=12, fig.height=6}
+selected_indicators <- c(
+  "Number of Drug Overdose Deaths",
+  "Heroin (T40.1)",
+  "Cocaine (T40.5)",
+  "Methadone (T40.3)",
+  "Opioids (Natural or synthetic)"
+)
+
+trend_data <- data_clean %>%
+  filter(indicator %in% selected_indicators) %>%
+  filter(!is.na(data_value))
+
+ggplot(trend_data, aes(x = date, y = data_value, color = indicator)) +
+  geom_line(linewidth = 1) +
+  labs(
+    title = "Selected Overdose Indicators in Alaska Over Time",
+    x = "Year",
+    y = "Deaths / Rate Value",
+    color = "Indicator"
+  ) +
+  guides(color = guide_legend(nrow = 2)) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    legend.position = "bottom",
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 8)
+  )
+```
+
+This plot compares several overdose-related indicators over time, allowing for identification of differences between drug categories and overall trends.
+
+## Average Deaths by Drug Type
+
+```{r}
+trend_data %>%
+  group_by(indicator) %>%
+  summarize(mean_value = mean(data_value, na.rm = TRUE)) %>%
+  ggplot(aes(x = reorder(indicator, mean_value), y = mean_value, fill = indicator)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(
+    title = "Average Deaths by Drug Type",
+    x = "Drug Category",
+    y = "Average Deaths"
+  ) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+This bar chart summarizes the average burden associated with each drug category across the study period.
+
+# Statistical Modeling
+
+## Linear Trend in Overall Overdose Deaths
+
+```{r}
+overall_deaths <- overall_deaths %>%
+  arrange(date) %>%
+  mutate(time_index = row_number())
+
+trend_model <- lm(data_value ~ time_index, data = overall_deaths)
+
+tidy(trend_model)
+```
+
+The linear model evaluates whether overdose deaths increased over time. A positive coefficient for time suggests an upward trend.
+
+## Model Visualization
+
+```{r}
+ggplot(overall_deaths, aes(x = time_index, y = data_value)) +
+  geom_point(color = "#2C7FB8", alpha = 0.7) +
+  geom_smooth(method = "lm", se = FALSE, color = "#D95F0E") +
+  labs(
+    title = "Linear Trend in Alaska Overdose Deaths",
+    x = "Time Index",
+    y = "Drug Overdose Deaths"
+  ) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+This regression plot provides a visual summary of the overall trend in overdose deaths.
+
+# Discussion
+
+The results of this analysis suggest that overdose patterns in Alaska have changed meaningfully over time. The time-series plots indicate that overdose deaths vary over time, and comparisons across indicators show that different drug categories contribute differently to the total burden.
+
+A strength of this dataset is that it includes both reported and predicted values, allowing comparison between observed mortality and modeled estimates. Additionally, multiple drug-specific indicators allow for more detailed analysis beyond total overdose deaths.
+
+However, this analysis has limitations. Because the dataset only includes Alaska, it cannot be used to compare trends across states or regions. Additionally, some drug categories overlap, so results should be interpreted with caution.
+
+# Conclusion
+
+This project examined overdose trends in Alaska from 2015 through 2025 using real CDC surveillance data. The analysis demonstrated how overdose mortality has changed over time and how different drug categories contribute to overall patterns.
+
+These findings highlight the importance of temporal analysis in understanding public health trends. Future research could expand this work by incorporating additional states, regional comparisons, or more advanced statistical modeling approaches.

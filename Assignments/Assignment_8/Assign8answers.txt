@@ -1,0 +1,22 @@
+1. Are any of your predicted response values from your best model scientifically meaningless? Explain.
+
+Some predicted values could be scientifically meaningless if they fall outside a realistic biological range. For example, if the model predicts a negative fungal growth rate, that may not make biological sense. Predictions may also be less meaningful when they are made for combinations of temperature, light, nitrogen, humidity, and species values that were not well represented in the original dataset.
+
+2. In your plots, did you find any non-linear relationships? Do a bit of research online and give a link to at least one resource explaining how to deal with modeling non-linear relationships in R.
+
+Some of the plots suggest that the relationships between predictors and growth rate are not perfectly linear. This can be seen when the data points form a curve instead of a straight-line pattern. One way to handle non-linear relationships in R is to use polynomial terms or more flexible models, such as generalized additive models (GAMs), which let the data determine the shape of the relationship rather than forcing a straight line.
+
+Resource:
+https://m-clark.github.io/generalized-additive-models/application.html
+
+3. Write the code you would use to model the data found in “/Data/non_linear_relationship.csv” with a linear model (there are a few ways of doing this)
+
+library(tidyverse)
+
+nonlinear <- read_csv("Data/non_linear_relationship.csv")
+
+mod_nl1 <- lm(y ~ poly(x, 2), data = nonlinear)
+summary(mod_nl1)
+
+mod_nl2 <- lm(log(y) ~ x, data = nonlinear)
+summary(mod_nl2)

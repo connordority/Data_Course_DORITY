@@ -1,0 +1,141 @@
+---
+title: "Assignment 9: Graduate Admissions Modeling"
+author: "Connor Dority"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(easystats)
+library(MASS)
+library(caret)
+
+if (!dir.exists("figs")) dir.create("figs")
+```
+
+# Introduction
+
+In this assignment, I analyzed a dataset of graduate school admissions to determine what factors influence whether a student is admitted. Since the response variable (admit) is binary (yes/no), I used logistic regression models. I tested multiple models using GRE score, GPA, and undergraduate institution rank, then compared them to find the best fit.
+
+## Load and Inspect Data
+
+```{r}
+admissions <- read_csv("GradSchool_Admissions.csv")
+
+admissions <- admissions %>%
+  drop_na() %>%
+  mutate(
+    admit = factor(admit, levels = c(0,1), labels = c("No","Yes")),
+    rank = factor(rank)
+  )
+
+glimpse(admissions)
+summary(admissions)
+```
+
+## Data Analysis
+
+```{r}
+# Admission counts
+ggplot(admissions, aes(x = admit, fill = admit)) +
+  geom_bar() +
+  theme_minimal()
+
+# GRE vs Admission
+ggplot(admissions, aes(x = admit, y = gre, fill = admit)) +
+  geom_boxplot() +
+  theme_minimal()
+
+# GPA vs Admission
+ggplot(admissions, aes(x = admit, y = gpa, fill = admit)) +
+  geom_boxplot() +
+  theme_minimal()
+
+# Rank vs Admission
+ggplot(admissions, aes(x = rank, fill = admit)) +
+  geom_bar(position = "fill") +
+  theme_minimal()
+```
+
+From these plots, students who were admitted tend to have slightly higher GRE scores and GPAs. Admission rates also vary by undergraduate rank, suggesting all variables could be useful predictors.
+
+# Building Models
+
+```{r}
+mod1 <- glm(admit ~ gre + gpa + rank, data = admissions, family = binomial)
+mod2 <- glm(admit ~ gre + gpa, data = admissions, family = binomial)
+mod3 <- glm(admit ~ gpa + rank, data = admissions, family = binomial)
+mod4 <- glm(admit ~ gre + rank, data = admissions, family = binomial)
+mod5 <- glm(admit ~ gre * gpa + rank, data = admissions, family = binomial)
+```
+
+# Model Comparison
+
+```{r}
+compare_performance(mod1, mod2, mod3, mod4, mod5, rank = TRUE)
+```
+
+The model comparison shows which combination of predictors best balances fit and simplicity based on AIC and BIC values.
+
+# Stepwise Selection
+
+```{r}
+full_mod <- glm(admit ~ gre * gpa * rank, data = admissions, family = binomial)
+
+step_mod <- MASS::stepAIC(full_mod, trace = 0)
+
+mod_final <- glm(formula = step_mod$formula,
+                 data = admissions,
+                 family = binomial)
+
+compare_performance(mod1, mod2, mod3, mod4, mod5, mod_final, rank = TRUE)
+```
+
+Stepwise selection helps confirm which predictors should be included in the final model.
+
+# Train/Test Split
+
+To evaluate how well the model performs on new data, I split the dataset into training and testing sets.
+
+```{r}
+set.seed(123)
+
+train_index <- createDataPartition(admissions$admit, p = 0.8, list = FALSE)
+
+train_data <- admissions[train_index, ]
+test_data  <- admissions[-train_index, ]
+
+best_mod <- glm(formula = mod_final$formula,
+                data = train_data,
+                family = binomial)
+
+test_data <- test_data %>%
+  mutate(
+    prob = predict(best_mod, newdata = test_data, type = "response"),
+    pred = ifelse(prob > 0.5, "Yes", "No"),
+    pred = factor(pred, levels = c("No","Yes"))
+  )
+
+table(Predicted = test_data$pred, Observed = test_data$admit)
+mean(test_data$pred == test_data$admit)
+```
+
+This evaluates how well the model performs on unseen data.
+
+# Model Interpretation
+
+```{r}
+model_parameters(best_mod)
+exp(coef(best_mod))
+```
+
+The coefficients represent changes in log-odds. When converted to odds ratios:
+
+- Values greater than 1 increase the probability of admission  
+- Values less than 1 decrease the probability  
+
+GRE and GPA increase the likelihood of admission, while lower-ranked schools decrease the odds. GPA appears to have a slightly stronger effect than GRE, and rank shows a consistent negative relationship with admission probability.
+
+# Conclusion
+
+Logistic regression was appropriate since the outcome variable was binary. GRE, GPA, and undergraduate institution rank all contributed to predicting admission. After comparing multiple models, the final model balanced simplicity and performance well. Overall, stronger academic performance increases admission chances, while lower-ranked institutions are associated with reduced odds.

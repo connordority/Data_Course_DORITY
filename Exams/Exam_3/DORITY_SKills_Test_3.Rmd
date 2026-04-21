@@ -7,8 +7,8 @@ output: html_document
 library(tidyverse)
 library(janitor)
 library(broom)
-
-knitr::opts_knit$set(root.dir = "~/Desktop/Data_Course_DORITY/Exams/Exam_3")
+library(tidyr)
+library(purrr)
 ```
 
 
@@ -20,10 +20,12 @@ faculty_raw <- read_csv("FacultySalaries_1995.csv") |>
   clean_names()
 
 faculty <- faculty_raw |>
-  select(state, tier,
-         avg_assist_prof_salary,
-         avg_assoc_prof_salary,
-         avg_full_prof_salary) |>
+  select(
+    state, tier,
+    avg_assist_prof_salary,
+    avg_assoc_prof_salary,
+    avg_full_prof_salary
+  ) |>
   pivot_longer(
     cols = starts_with("avg_"),
     names_to = "rank",
@@ -32,8 +34,8 @@ faculty <- faculty_raw |>
   mutate(
     rank = case_when(
       rank == "avg_assist_prof_salary" ~ "Assist",
-      rank == "avg_assoc_prof_salary"  ~ "Assoc",
-      rank == "avg_full_prof_salary"   ~ "Full"
+      rank == "avg_assoc_prof_salary" ~ "Assoc",
+      rank == "avg_full_prof_salary" ~ "Full"
     )
   )
 
@@ -47,8 +49,6 @@ p1 <- ggplot(faculty, aes(x = rank, y = salary, fill = rank)) +
 
 p1
 
-anova_model <- aov(salary ~ state + tier + rank, data = faculty)
-summary(anova_model)
 ```
 
 ## ANOVA model
@@ -107,25 +107,21 @@ p2 <- ggplot(jun_long, aes(x = years_since_burn, y = concentration)) +
 p2
 ```
 
-## Build models for each chemical
+## Build Generalized Linear Model
 
 ```{r}
-model_results <- jun_long |>
-  nest(data = -chemical) |>
-  mutate(
-    model = map(data, ~ lm(concentration ~ years_since_burn, data = .x)),
-    tidy = map(model, tidy)
-  ) |>
-  unnest(tidy)
+glm_model <- glm(concentration ~ chemical * years_since_burn, data = jun_long)
 
-model_results
+glm_results <- tidy(glm_model)
+
+glm_results
 ```
 
 ## Find significant relationships
 
 ```{r}
-significant <- model_results |>
-  filter(term == "years_since_burn", p.value < 0.05)
+significant <- glm_results |>
+  filter(str_detect(term, "years_since_burn"), p.value < 0.05)
 
 significant
 ```
@@ -133,58 +129,4 @@ significant
 ## Interpretation
 
 Several chemical compounds show statistically significant relationships with years since burn, suggesting that fire history influences chemical concentration patterns over time.
-
-
-# 3 — PREDICTIONS
-
-## Create prediction dataset
-
-```{r}
-pred_data <- tibble(
-  years_since_burn = seq(
-    min(jun_long$years_since_burn, na.rm = TRUE),
-    max(jun_long$years_since_burn, na.rm = TRUE),
-    by = 1
-  )
-)
-```
-
-## Fit example model (first chemical)
-
-```{r}
-first_chemical <- unique(jun_long$chemical)[1]
-
-example_model <- lm(
-  concentration ~ years_since_burn,
-  data = filter(jun_long, chemical == first_chemical)
-)
-
-summary(example_model)
-```
-
-## Generate predictions
-
-```{r}
-pred_data <- pred_data |>
-  mutate(pred = predict(example_model, newdata = pred_data))
-
-pred_data
-```
-
-## Plot predictions
-
-```{r}
-p3 <- ggplot(pred_data, aes(x = years_since_burn, y = pred)) +
-  geom_line() +
-  theme_bw()
-
-p3
-```
-
-## Interpretation
-
-Several chemical compounds show significant relationships with years since burn, many displaying non-linear trends. This suggests that post-fire recovery influences chemical concentrations in complex ways, with some compounds increasing, decreasing, or peaking at intermediate times following disturbance.
-
-```
-```
 

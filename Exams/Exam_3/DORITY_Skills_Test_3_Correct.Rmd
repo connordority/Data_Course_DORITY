@@ -1,0 +1,132 @@
+---
+title: "Exam 3 - Connor Dority"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(janitor)
+library(broom)
+library(tidyr)
+library(purrr)
+```
+
+
+# 1 — FACULTY DATA
+
+## Read and clean data
+```{r}
+faculty_raw <- read_csv("FacultySalaries_1995.csv") |>
+  clean_names()
+
+faculty <- faculty_raw |>
+  select(
+    state, tier,
+    avg_assist_prof_salary,
+    avg_assoc_prof_salary,
+    avg_full_prof_salary
+  ) |>
+  pivot_longer(
+    cols = starts_with("avg_"),
+    names_to = "rank",
+    values_to = "salary"
+  ) |>
+  mutate(
+    rank = case_when(
+      rank == "avg_assist_prof_salary" ~ "Assist",
+      rank == "avg_assoc_prof_salary" ~ "Assoc",
+      rank == "avg_full_prof_salary" ~ "Full"
+    )
+  )
+
+glimpse(faculty)
+
+p1 <- ggplot(faculty, aes(x = rank, y = salary, fill = rank)) +
+  geom_boxplot() +
+  facet_wrap(~ tier) +
+  labs(x = "Rank", y = "Salary") +
+  theme_bw()
+
+p1
+
+```
+
+## ANOVA model
+
+```{r}
+anova_model <- aov(salary ~ state + tier + rank, data = faculty)
+summary(anova_model)
+```
+
+## Interpretation
+
+Salary differs significantly by rank, with Full professors earning the highest salaries, followed by Associate and Assistant professors. Additionally, institutional tier influences salary, with Tier I schools generally showing higher salary distributions compared to Tier II and IIB institutions. This suggests both rank and institutional prestige contribute to salary differences.
+
+
+# 2 — JUNIPER DATA
+
+
+## Read and clean data
+
+```{r}
+juniper <- read_csv("Juniper_Oils.csv") |>
+  clean_names()
+
+glimpse(juniper)
+```
+
+## Convert to tidy format
+
+```{r}
+jun_long <- juniper |>
+  pivot_longer(
+    cols = c(
+      alpha_acorenol, alpha_cedrene, alpha_chamigrene, alpha_eudesmol,
+      alpha_himachalene, alpha_pinene, alpha_terpineol, beta_acorenol,
+      beta_cedrene, beta_chamigrene, beta_eudesmol, cedr_8_en_13_ol,
+      cedr_8_en_15_ol, cedr_9_ene, cedrol, cis_thujopsene,
+      compound_1, compound_2, cuparene, gamma_eudesmol,
+      para_cymene, thujopsenal, widdrol
+    ),
+    names_to = "chemical",
+    values_to = "concentration"
+  )
+
+glimpse(jun_long)
+```
+
+## Plot trends over time
+
+```{r}
+p2 <- ggplot(jun_long, aes(x = years_since_burn, y = concentration)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(se = TRUE) +
+  facet_wrap(~ chemical, scales = "free_y") +
+  theme_bw()
+
+p2
+```
+
+## Build Generalized Linear Model
+
+```{r}
+glm_model <- glm(concentration ~ chemical * years_since_burn, data = jun_long)
+
+glm_results <- tidy(glm_model)
+
+glm_results
+```
+
+## Find significant relationships
+
+```{r}
+significant <- glm_results |>
+  filter(str_detect(term, "years_since_burn"), p.value < 0.05)
+
+significant
+```
+
+## Interpretation
+
+Several chemical compounds show statistically significant relationships with years since burn, suggesting that fire history influences chemical concentration patterns over time.
+
